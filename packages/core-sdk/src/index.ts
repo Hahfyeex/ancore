@@ -19,6 +19,16 @@ export {
   type PaymentSigner,
 } from './send-payment';
 
+// Wallet import
+export {
+  importWallet,
+  type ImportWalletParams,
+  type ImportWalletDeps,
+  type ImportedWallet,
+  type WalletEncryptor,
+  type MnemonicDeriver,
+} from './import-wallet';
+
 // Account transaction builder (wrapper around Stellar SDK's TransactionBuilder)
 export {
   AccountTransactionBuilder,
