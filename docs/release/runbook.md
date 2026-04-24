@@ -16,13 +16,26 @@ Step-by-step guide for cutting an Ancore release and operating the release gate.
 
 1. Ensure all feature branches targeting this release are merged to `main`.
 2. Pull latest `main` and verify CI is green.
-3. Open `docs/release/checklist.md` and reset all checkboxes to `[ ]`.
-4. Work through each checklist section, checking items as they are verified.
-5. Commit the updated checklist:
+3. Create a release branch from `main`:
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b release/vX.Y.Z
+   ```
+4. Bump version in root `package.json` to `vX.Y.Z-rc.1` and synchronize:
+   ```bash
+   # Use a script if available or manual update
+   # Ensure all workspace packages and contracts match this version
+   git commit -am "chore(release): bump version to vX.Y.Z-rc.1"
+   git push origin release/vX.Y.Z
+   ```
+5. Open `docs/release/checklist.md` and reset all checkboxes to `[ ]`.
+6. Work through each checklist section, checking items as they are verified.
+7. Commit the updated checklist to the release branch:
    ```bash
    git add docs/release/checklist.md
    git commit -m "chore(release): update checklist for vX.Y.Z"
-   git push origin main
+   git push origin release/vX.Y.Z
    ```
 
 ---
@@ -30,13 +43,21 @@ Step-by-step guide for cutting an Ancore release and operating the release gate.
 ## 2. Tagging the release
 
 ```bash
-git checkout main
-git pull origin main
+git checkout release/vX.Y.Z
+git pull origin release/vX.Y.Z
+# For RC:
+git tag -a vX.Y.Z-rc.N -m "Release Candidate vX.Y.Z-rc.N"
+git push origin vX.Y.Z-rc.N
+
+# For Final Release:
+# 1. Update version to vX.Y.Z (remove -rc.N)
+# 2. Commit and push
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
 Pushing the tag triggers the `Release Gate` workflow automatically.
+See [docs/release/BRANCH_POLICY.md](file:///c:/Users/ADMIN/Desktop/lekan-drips/ancore/docs/release/BRANCH_POLICY.md) for detailed rules.
 
 ---
 

@@ -64,7 +64,9 @@ Items without `BLOCKING` are advisory and do not fail the gate.
 
 - [ ] Release PR approved by `@ancore/core-team` (minimum 2 approvers) BLOCKING
 - [ ] Security-sensitive changes approved by `@ancore/security-team` BLOCKING
-- [ ] Release tag created from a commit on `main` (not a feature branch) BLOCKING
+- [ ] Release branch `release/vX.Y.Z` created from `main` BLOCKING
+- [ ] Version in all packages and contracts synchronized with root `package.json` BLOCKING
+- [ ] Release tag created from the release branch (not `main` or feature branch) BLOCKING
 
 ---
 
