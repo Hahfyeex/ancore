@@ -11,7 +11,7 @@ export interface FiatFormatOptions {
   /**
    * Locale string for formatting
    * Fallback behavior: If the provided locale is invalid or unsupported,
-   * it falls back to the system default locale, and ultimately to 'en-US'.
+   * it falls back directly to 'en-US'.
    * @default 'en-US'
    */
   locale?: string | string[];
@@ -54,7 +54,7 @@ function resolveSupportedLocale(locale: string | string[]): string | string[] {
  * Uses standard Intl.NumberFormat rounding (half-expand).
  *
  * Fallback behavior:
- * - If locale is invalid, falls back to standard Intl fallback ('en-US' usually)
+ * - If locale is invalid or unsupported, falls back to 'en-US'
  * - If Intl is not available or parameters are severely malformed, falls back to basic string formatting
  *
  * @param amount The numerical amount to format

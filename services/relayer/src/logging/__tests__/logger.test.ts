@@ -34,7 +34,7 @@ describe('redactAccountId', () => {
   });
 
   it('truncates to first 8 chars + ellipsis for longer values', () => {
-    expect(redactAccountId('GBXXX123YYYY')).toBe('GBXXX123…');
+    expect(redactAccountId('GBXXX123YYYY')).toBe('GBXXX123\u2026');
   });
 });
 
@@ -54,7 +54,7 @@ describe('redactSessionKey', () => {
 
   it('truncates to first 8 chars + ellipsis for longer values', () => {
     const key = 'a'.repeat(64);
-    expect(redactSessionKey(key)).toBe('aaaaaaaa…');
+    expect(redactSessionKey(key)).toBe('aaaaaaaa\u2026');
   });
 });
 
@@ -194,7 +194,7 @@ describe('createRequestLogger', () => {
       log.info({}, 'test');
     }) as Record<string, unknown>;
 
-    expect(entry['accountId']).toBe('GBXXX123…');
+    expect(entry['accountId']).toBe('GBXXX123\u2026');
   });
 
   it('redacts sessionKey to first 8 chars', () => {
@@ -207,7 +207,7 @@ describe('createRequestLogger', () => {
       log.info({}, 'test');
     }) as Record<string, unknown>;
 
-    expect(entry['sessionKey']).toBe('abcdef12…');
+    expect(entry['sessionKey']).toBe('abcdef12\u2026');
   });
 
   it('omits accountId when not provided', () => {

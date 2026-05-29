@@ -447,7 +447,15 @@ export class StellarClient {
   async submitTransaction(
     transaction: Transaction | string
   ): Promise<Horizon.HorizonApi.SubmitTransactionResponse> {
-    const signedTransaction = this.resolveSignedTransaction(transaction);
+    let signedTransaction: Transaction;
+    try {
+      signedTransaction = this.resolveSignedTransaction(transaction);
+    } catch (error) {
+      throw new NetworkError('Invalid signed transaction XDR', {
+        cause: error instanceof Error ? error : undefined,
+      });
+    }
+
     const callerIsRetryable = this.retryOptions.isRetryable;
     const retryOptions: RetryOptions = {
       ...this.retryOptions,

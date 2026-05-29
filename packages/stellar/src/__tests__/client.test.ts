@@ -473,14 +473,19 @@ describe('StellarClient', () => {
       expect(horizon.submitTransaction).toHaveBeenCalledWith(mockTransaction);
     });
 
-    it('should surface XDR decode errors before submission', async () => {
+    it('should normalize XDR decode errors before submission', async () => {
       const client = new StellarClient({ network: 'testnet', retryOptions: fastRetryOptions });
       const horizon = getHorizonMock(client);
+      const malformed = new Error('malformed XDR');
       mockTransactionFromXDR.mockImplementationOnce(() => {
-        throw new Error('malformed XDR');
+        throw malformed;
       });
 
-      await expect(client.submitTransaction('bad-xdr')).rejects.toThrow('malformed XDR');
+      await expect(client.submitTransaction('bad-xdr')).rejects.toMatchObject({
+        name: 'NetworkError',
+        message: 'Invalid signed transaction XDR',
+        cause: malformed,
+      });
       expect(horizon.submitTransaction).not.toHaveBeenCalled();
     });
 
