@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 3,
+    "address": 2,
     "nonce": 0
   },
   "auth": [
@@ -192,34 +192,11 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "execute"
+                "symbol": "upgrade"
               }
             ],
             "data": {
-              "vec": [
-                {
-                  "vec": [
-                    {
-                      "symbol": "Owner"
-                    }
-                  ]
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                },
-                {
-                  "symbol": "transfer"
-                },
-                {
-                  "vec": []
-                },
-                {
-                  "u64": 1
-                },
-                "void",
-                "void",
-                "void"
-              ]
+              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
             }
           }
         }
@@ -238,12 +215,12 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "execute"
+                "symbol": "upgrade"
               }
             ],
             "data": {
               "error": {
-                "contract": 4
+                "contract": 9
               }
             }
           }
@@ -264,7 +241,7 @@
               },
               {
                 "error": {
-                  "contract": 4
+                  "contract": 9
                 }
               }
             ],
@@ -289,7 +266,7 @@
               },
               {
                 "error": {
-                  "contract": 4
+                  "contract": 9
                 }
               }
             ],
@@ -299,32 +276,13 @@
                   "string": "contract try_call failed"
                 },
                 {
-                  "symbol": "execute"
+                  "symbol": "upgrade"
                 },
                 {
                   "vec": [
                     {
-                      "vec": [
-                        {
-                          "symbol": "Owner"
-                        }
-                      ]
-                    },
-                    {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                    },
-                    {
-                      "symbol": "transfer"
-                    },
-                    {
-                      "vec": []
-                    },
-                    {
-                      "u64": 1
-                    },
-                    "void",
-                    "void",
-                    "void"
+                      "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    }
                   ]
                 }
               ]
