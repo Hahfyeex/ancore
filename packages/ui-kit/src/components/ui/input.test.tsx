@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { Input } from './input';
+import { expectNoA11yViolations } from '../../__tests__/test-utils/a11y';
 
 describe('Input', () => {
   it('renders with placeholder', () => {
@@ -35,5 +36,16 @@ describe('Input', () => {
 
     rerender(<Input type="password" placeholder="Password" />);
     expect(screen.getByPlaceholderText('Password')).toHaveAttribute('type', 'password');
+  });
+
+  it('has no axe violations when labelled', async () => {
+    const { container } = render(
+      <label>
+        Email
+        <Input type="email" />
+      </label>
+    );
+
+    await expectNoA11yViolations(container);
   });
 });

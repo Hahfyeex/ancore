@@ -80,10 +80,13 @@ fn execute(
     to: Address,
     function: Symbol,
     args: Vec<Val>,
-) -> bool
+    expected_nonce: u64,
+    session_pub_key: Option<BytesN<32>>,
+    signature: Option<BytesN<64>>,
+) -> Result<bool, ContractError>
 ```
 
-Execute a transaction on behalf of the account.
+Execute a transaction on behalf of the account. For owner execution, omit the session key parameters. For session key execution, provide the session public key and signature. The signature payload is computed on-chain to prevent redundant payload parameters.
 
 ### Session Keys
 
@@ -102,6 +105,33 @@ fn get_session_key(env: Env, public_key: BytesN<32>) -> Option<SessionKey>
 
 Manage session keys for the account.
 
+#### Session permission bits
+
+Session key permissions are stored on-chain as `Vec<u32>`. Each value is a permission index; SDK/UI code may combine selections into a bitmask using `1 << index`.
+
+| Index | Bit flag           | Name              | Description                              |
+| ----- | ------------------ | ----------------- | ---------------------------------------- |
+| `0`   | `1 << 0` (`0b001`) | `SEND_PAYMENT`    | Authorize payment operations             |
+| `1`   | `1 << 1` (`0b010`) | `MANAGE_DATA`     | Authorize manage-data operations         |
+| `2`   | `1 << 2` (`0b100`) | `INVOKE_CONTRACT` | Authorize arbitrary contract invocations |
+
+> **Important:** `execute()` requires the session key `Vec<u32>` to contain the internal `PERMISSION_EXECUTE` constant (`1`). This is separate from the SDK bitmask representation above. Always include `1` in the permissions vector for session keys that need to call `execute()`, regardless of other permission indices selected.
+
+Use `@ancore/account-abstraction` helpers (`permissionsToBitmask`, `bitmaskToContractVec`, `permissionsToContractVec`) to keep UI, SDK, and contract representations aligned.
+
+### Validation Module Boundary
+
+Pluggable validation modules are defined in `contracts/validation-modules/`.
+The MVP account integration boundary is interface-level only: the account
+contract does not yet store module addresses or invoke modules during
+`execute`.
+
+Future module-aware execution should validate the existing owner/session-key
+authority and nonce first, build a `ValidationContext` from the exact target,
+function, canonical argument digest, and nonce, invoke the configured module's
+`validate` function, then increment nonce and dispatch only after module
+approval. Module failures must fail closed.
+
 ## Contract Errors
 
 The contract uses structured error codes to provide clear feedback for failure conditions. These error codes are essential for SDK and frontend error handling.
@@ -118,6 +148,7 @@ The contract uses structured error codes to provide clear feedback for failure c
 | 6          | `SessionKeyExpired`      | Session key has expired                |
 | 7          | `InsufficientPermission` | Insufficient permissions               |
 | 8          | `InvalidVersion`         | Invalid version provided for migration |
+| 9          | `InvalidSignature`       | Invalid signature provided             |
 
 ### Error Handling Examples
 

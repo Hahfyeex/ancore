@@ -21,11 +21,15 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
   ],
 
   webServer: {
     // ui-kit must be built before dev server starts; CI runs `pnpm build:deps` first
-    command: 'pnpm --filter @ancore/ui-kit build && pnpm dev',
+    command: 'corepack pnpm --filter @ancore/ui-kit build && corepack pnpm dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

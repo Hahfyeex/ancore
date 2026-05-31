@@ -48,8 +48,16 @@ We are committed to providing a welcoming and inclusive environment. Please:
    pnpm install
    ```
 5. Build the project:
+
    ```bash
    pnpm build
+   ```
+
+6. Run the baseline verification suite:
+   ```bash
+   pnpm lint
+   pnpm typecheck
+   pnpm test
    ```
 
 ## Development Workflow
@@ -91,6 +99,9 @@ We are committed to providing a welcoming and inclusive environment. Please:
    ```
 
    Follow [Conventional Commits](https://www.conventionalcommits.org/)
+   Staged TypeScript, JavaScript, JSON, and Markdown files are formatted with Prettier during
+   pre-commit. Staged source files under `packages/*`, `apps/*`, and `services/relayer` also run
+   their package-local ESLint autofix command.
 
 6. Push to your fork:
 
@@ -99,6 +110,55 @@ We are committed to providing a welcoming and inclusive environment. Please:
    ```
 
 7. Open a Pull Request
+
+## App Development
+
+### Full-Stack Local Development
+
+To develop features that span multiple apps and services, set up a local development environment:
+
+```bash
+# Copy environment file
+cp .env.example .env.local
+
+# Start services in separate terminals
+pnpm --filter @ancore/indexer dev
+pnpm --filter @ancore/relayer dev
+pnpm --filter @ancore/ai-agent dev
+
+# Validate service health
+make validate-env
+```
+
+**See [Local Services Setup](docs/development/local-services.md) for detailed instructions.**
+
+### App-Specific Guides
+
+- **Extension Wallet**: [apps/extension-wallet/README.md](apps/extension-wallet/README.md)
+- **Mobile Wallet**: [apps/mobile-wallet/README.md](apps/mobile-wallet/README.md)
+- **Web Dashboard**: [apps/web-dashboard/README.md](apps/web-dashboard/README.md)
+
+### Common Commands
+
+```bash
+# Run all tests
+make test
+
+# Run contract tests only
+make test-contracts
+
+# Lint all code
+make lint
+
+# Fix linting issues
+make lint-fix
+
+# Build all packages
+make build
+
+# See all available targets
+make help
+```
 
 ## Security Boundaries
 
@@ -305,6 +365,21 @@ Describe any security implications
 ```
 
 ## Community Contributions
+
+### How to Pick an Issue
+
+Use labels to pick work matching your experience:
+
+- `good first issue`: small, self-contained tasks with low risk
+- `help wanted`: medium-scope tasks where maintainers are available for guidance
+- `docs`: documentation-only tasks
+- `refactor`: code quality and maintainability improvements
+
+Before starting:
+
+1. Comment on the issue that you want to work on it.
+2. Confirm scope and acceptance criteria with a maintainer.
+3. Link your PR to the issue (`Closes #<id>`).
 
 ### Good First Issues
 

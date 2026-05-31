@@ -17,6 +17,8 @@ Ancore brings advanced account abstraction capabilities to Stellar/Soroban, enab
 
 This is a monorepo containing:
 
+<!-- repo-structure-check:start -->
+
 ```
 ancore/
 ├── apps/                     # User-facing applications
@@ -34,20 +36,32 @@ ancore/
 │
 ├── contracts/                # Soroban smart contracts
 │   ├── account/              # Core account contract
-│   ├── validation-modules/   # Pluggable validation logic
-│   ├── invoice/              # Invoice system
-│   └── upgrade/              # Upgrade mechanisms
+│   ├── validation-modules/   # Planned pluggable validation module scaffolds
+│   ├── invoice/              # Planned invoice contract scaffolds
+│   └── upgrade/              # Planned upgrade contract scaffolds
 │
 ├── services/                 # Optional infrastructure
 │   ├── relayer/              # Transaction relay service
 │   ├── indexer/              # Blockchain indexer
-│   └── ai-agent/             # AI-powered financial agent
+│   └── ai-agent/             # Planned AI orchestration service scaffold
 │
 └── docs/                     # Documentation
     ├── architecture/         # System architecture
     ├── security/             # Security model & audits
-    └── guides/               # Developer guides
+    └── user-guide/           # End-user guides
 ```
+
+<!-- repo-structure-check:end -->
+
+### Repository Structure Drift Check
+
+The repository tree above is guarded by a lightweight drift check so contributor-facing docs do not reference renamed or removed modules. Run it locally with:
+
+```bash
+pnpm docs:check-structure
+```
+
+When adding, renaming, or removing documented modules, update the tree inside the `repo-structure-check` markers in this README and in `docs/architecture/OVERVIEW.md`. If the checked documentation set changes, update `scripts/check-docs-repo-structure.mjs` and the docs structure workflow together.
 
 ## Security Boundaries
 
@@ -113,9 +127,21 @@ pnpm contracts:build
 pnpm contracts:test
 ```
 
+### Updating WASM Size Budgets
+
+WASM contract sizes are monitored in CI to prevent regression. The budget for each contract is defined in `contracts/budgets/wasm-budgets.json`.
+
+If your changes intentionally increase the contract size beyond the current budget:
+
+1. Ensure your contract builds locally: `pnpm contracts:build`
+2. Check the new size of the optimized `.wasm` files in `contracts/target/wasm32-unknown-unknown/release/`.
+3. You can run the local size check with: `node scripts/check-wasm-size.js`
+4. Update `contracts/budgets/wasm-budgets.json` with the new size budget, and commit the changes.
+
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+Please also review our [Code of Conduct](CODE_OF_CONDUCT.md) before engaging in community discussions.
 
 **Quick guidelines:**
 
@@ -173,14 +199,34 @@ For a deep dive into Ancore's architecture, see:
 
 ## Roadmap
 
+### In progress (active)
+
 - [x] Core account abstraction contracts
-- [x] Session key implementation
-- [ ] Browser extension wallet (v1)
-- [ ] Mobile wallet
+- [x] Session key primitives (contract + SDK foundation)
+- [x] Browser extension wallet foundation
+- [x] Web dashboard foundation
+- [ ] Production-ready relayer security path
+- [ ] Production-ready account contract hardening and audit
+- [ ] MVP release gate completion
+
+### Planned (post-MVP)
+
+- [ ] Mobile wallet productionization
 - [ ] Social recovery
 - [ ] Invoice system
 - [ ] AI agent integration
 - [ ] Mainnet launch
+
+### Planned module scaffolds (intentionally preserved)
+
+- `contracts/validation-modules/` - reserved for modular auth/policy contracts
+- `contracts/invoice/` - reserved for invoice/request-to-pay contracts
+- `contracts/upgrade/` - reserved for upgrade governance contracts
+- `services/ai-agent/` - reserved for AI workflow orchestration
+
+These directories are intentionally kept as scaffolds to preserve architecture direction and contributor workflow without implying production completeness.
+
+For execution waves (2-3 features at a time), see `docs/product/FINANCIAL_OS_ROADMAP.md`.
 
 ## Community
 
