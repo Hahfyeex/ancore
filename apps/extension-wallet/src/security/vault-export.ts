@@ -47,23 +47,20 @@ async function ensureStorageAccess(
       throw new VaultExportError('Enter your password.');
     }
 
-    const valid = await verifyVaultPassword(password);
-    if (!valid) {
-      throw new VaultExportError('Incorrect password.');
-    }
-  } else if (!storageManager.isUnlocked) {
-    throw new VaultExportError('Wallet is locked. Unlock your wallet first.');
-  }
-
-  if (!storageManager.isUnlocked) {
-    if (!password) {
-      throw new VaultExportError('Wallet is locked.');
+    // Re-auth against the vault backing this manager (not a separate global adapter).
+    if (storageManager.isUnlocked) {
+      storageManager.lock();
     }
 
     const unlocked = await storageManager.unlock(password);
     if (!unlocked) {
       throw new VaultExportError('Incorrect password.');
     }
+    return;
+  }
+
+  if (!storageManager.isUnlocked) {
+    throw new VaultExportError('Wallet is locked. Unlock your wallet first.');
   }
 }
 

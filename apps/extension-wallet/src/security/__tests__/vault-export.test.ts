@@ -66,6 +66,7 @@ describe('vault-export', () => {
   let storage: MockStorageAdapter;
 
   beforeEach(() => {
+    localStorage.clear();
     storage = new MockStorageAdapter();
     resetVaultStorageManagerForTests();
   });
