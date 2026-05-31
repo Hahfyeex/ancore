@@ -34,6 +34,7 @@ import { SettingsScreen } from '../screens/Settings/SettingsScreen';
 import { SendScreen as SendFlowScreen } from '../screens/Send/SendScreen';
 import { ScheduledTransfersScreen } from '../screens/ScheduledTransfers/ScheduledTransfersScreen';
 import { useDashboardSettingsStore } from '../state/dashboard-settings';
+import { EmptyTransactions } from '../components/EmptyTransactions';
 
 const APP_TITLE = 'Ancore Extension';
 
@@ -511,10 +512,12 @@ export function HistoryActivityList({
   activeFilter,
   entries,
   onFilterChange,
+  onReceive,
 }: {
   activeFilter: HistoryFilter;
   entries: HistoryEntry[];
   onFilterChange: (filter: HistoryFilter) => void;
+  onReceive?: () => void;
 }) {
   return (
     <Card title="Recent activity">
@@ -539,10 +542,11 @@ export function HistoryActivityList({
         })}
       </div>
       {entries.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
-          <p className="text-sm font-medium text-foreground">No transactions match this filter.</p>
-          <p className="mt-1 text-xs text-muted-foreground">Try a different activity chip.</p>
-        </div>
+        <EmptyTransactions
+          variant={activeFilter}
+          onReceive={onReceive}
+          onResetFilter={() => onFilterChange('all')}
+        />
       ) : (
         <div className="space-y-3">
           {entries.map((entry) => (

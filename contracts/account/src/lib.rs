@@ -1293,4 +1293,17 @@ mod test {
         ));
         assert_eq!(client.get_nonce(), 1);
     }
+
+    /// Confirm PERMISSION_EXECUTE equals the value documented in
+    /// contracts/account/README.md and docs/contract-methods.md.
+    /// If this test fails, update the documentation tables to match the new value.
+    #[test]
+    fn test_permission_execute_constant_value() {
+        assert_eq!(
+            PERMISSION_EXECUTE,
+            1u32,
+            "PERMISSION_EXECUTE value changed — update permission bit tables in \
+             contracts/account/README.md and docs/contract-methods.md"
+        );
+    }
 }

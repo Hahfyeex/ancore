@@ -2,6 +2,13 @@
 
 Blockchain indexer service for the Ancore ecosystem. Provides paginated, filterable query endpoints for account activity data.
 
+## Contract Event Catalog
+
+For a full list of contract events that this service ingests — including field types,
+sample payloads, and recommended indexer actions — see:
+
+**[`docs/indexer/contract-events.md`](../../docs/indexer/contract-events.md)**
+
 ## Features
 
 - **Cursor-based pagination**: Stable pagination that handles concurrent inserts
