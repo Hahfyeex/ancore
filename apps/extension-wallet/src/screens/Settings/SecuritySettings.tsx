@@ -650,7 +650,7 @@ function SecurityMenu({
               if (!password) return;
 
               const storage = SecureStorageManager.shared?.() ?? SecureStorageManager;
-               
+
               const vault: any = await storage.unlock(password);
               if (typeof vault.verifyPassword === 'function') {
                 await vault.verifyPassword(password);
@@ -659,7 +659,7 @@ function SecurityMenu({
               onRequirePasswordForSensitiveActionsChange(true);
             } catch (err) {
               // do not log plaintext; show minimal error
-               
+
               alert('Incorrect password. Cannot enable password protection.');
             }
           }}
