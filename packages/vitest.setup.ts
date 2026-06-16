@@ -10,22 +10,18 @@
  */
 
 import '@testing-library/jest-dom';
-import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
-
-// jsdom may expose crypto.subtle but it is incomplete on some CI runners (PBKDF2/AES-GCM).
-// Always use Node webcrypto so secure-storage and @ancore/crypto behave identically everywhere.
-Object.defineProperty(globalThis, 'crypto', {
-  value: webcrypto,
-  configurable: true,
-});
+import { ensureWebCrypto } from './ensure-webcrypto';
 
 afterEach(() => {
   cleanup();
 });
 
 beforeEach(() => {
+  // jsdom can replace crypto after setupFiles; re-apply before every test.
+  ensureWebCrypto();
+
   // Prevent extension API mocks from leaking between test files in CI.
   delete (globalThis as { chrome?: unknown }).chrome;
   delete (globalThis as { browser?: unknown }).browser;

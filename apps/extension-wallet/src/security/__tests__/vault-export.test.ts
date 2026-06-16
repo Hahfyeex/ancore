@@ -1,3 +1,4 @@
+import '../../../../../packages/ensure-webcrypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { encryptSecretKey } from '@ancore/crypto';
 import { SecureStorageManager, createStorageAdapter, type StorageAdapter } from '@ancore/core-sdk';
@@ -47,6 +48,10 @@ class MockStorageAdapter implements StorageAdapter {
   async remove(key: string): Promise<void> {
     this.store.delete(key);
   }
+
+  clearStore(): void {
+    this.store.clear();
+  }
 }
 
 const PASSWORD = 'SecurePass123!';
@@ -75,6 +80,7 @@ describe('vault-export', () => {
   beforeEach(() => {
     localStorage.clear();
     storage = createStorageAdapter() as MockStorageAdapter;
+    storage.clearStore();
     resetVaultStorageManagerForTests();
   });
 

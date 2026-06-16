@@ -1,13 +1,12 @@
+import '../../../../../packages/ensure-webcrypto';
 import { webcrypto } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EncryptedPayload } from '@ancore/core-sdk';
 
-if (!globalThis.crypto?.subtle) {
-  Object.defineProperty(globalThis, 'crypto', {
-    value: webcrypto,
-    configurable: true,
-  });
-}
+Object.defineProperty(globalThis, 'crypto', {
+  value: webcrypto,
+  configurable: true,
+});
 
 if (!globalThis.btoa) {
   globalThis.btoa = (value: string) => Buffer.from(value, 'binary').toString('base64');
