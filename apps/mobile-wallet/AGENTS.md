@@ -134,7 +134,7 @@ HistoryScreen → usePaginatedTransactionHistory → TransactionHistoryAdapter
 | Biometric | Keychain            | Password blob for biometric unlock        |
 | Data      | AsyncStorage        | Account metadata, prefs — **never seeds** |
 
-**Today:** `MemorySecureStoreAdapter` for tests only — production needs `react-native-keychain`.
+**Today:** `KeychainSecureStoreAdapter` (`react-native-keychain`) for production, `MemorySecureStoreAdapter` for tests. Pick via `createSecureStoreAdapter()`. Tier rules: [docs/secure-storage.md](./docs/secure-storage.md). Device cold-start QA needs the host app (#780).
 
 **Vault duplication gap:** `MobileSecureVault` parallels `@ancore/core-sdk` `SecureStorageManager` but is not shared with the extension. Unify before shipping.
 

@@ -119,7 +119,7 @@ interface TransactionHistoryAdapter {
 
 - `accounts/` - Account management and key storage
 - `security/` - Encryption and authentication
-- `storage/` - Secure persistent storage
+- `storage/` - Secure persistent storage (Keychain in production, in-memory under tests — see [docs/secure-storage.md](./docs/secure-storage.md))
 - `sdk/` - Stellar SDK integration
 
 ## Testing
