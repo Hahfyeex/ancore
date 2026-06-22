@@ -30,6 +30,10 @@ import { ScheduledTransfersScreen } from '../screens/ScheduledTransfers/Schedule
 import { useDashboardSettingsStore } from '../state/dashboard-settings';
 import { EmptyTransactions } from '../components/EmptyTransactions';
 import { ErrorBoundary } from '../components/ErrorBoundary/ErrorBoundary';
+import { useAccountStore } from '../stores/account';
+import { resolveIndexerUrl } from '../config/urls';
+import { createIndexerActivityAdapter } from '../adapters/indexerActivityAdapter';
+import type { IndexerActivityRecord } from '../adapters/indexerActivityAdapter';
 
 const APP_TITLE = 'Ancore Extension';
 
@@ -389,32 +393,186 @@ const HISTORY_FILTERS: Array<{ value: HistoryFilter; label: string }> = [
   { value: 'failed', label: 'Failed' },
 ];
 
-const HISTORY_ENTRIES: HistoryEntry[] = [
-  {
-    id: '1',
-    label: 'Received from Treasury',
-    amount: '+320 XLM',
-    date: 'Today',
-    kind: 'received',
+// ---------------------------------------------------------------------------
+// Indexer data → HistoryEntry mapping helpers
+// ---------------------------------------------------------------------------
+
+function shortenAddress(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function humanizeActivityType(activityType: string): string {
+  switch (activityType) {
+    case 'payment':
+      return 'Payment';
+    case 'transfer':
+      return 'Transfer';
+    case 'contract_invocation':
+      return 'Contract interaction';
+    case 'contract_call':
+      return 'Contract call';
+    case 'smart_account_execute':
+      return 'Smart account execute';
+    case 'liquidity_pool':
+      return 'Liquidity pool';
+    default:
+      return activityType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+}
+
+function formatActivityDate(isoString: string): string {
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return isoString;
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round(
+    (startOfToday.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function mapActivityToEntry(activity: IndexerActivityRecord, accountId: string): HistoryEntry {
+  const isIncoming = activity.activity_type === 'payment' && activity.counterparty !== accountId;
+  const isPayment = activity.activity_type === 'payment';
+
+  const kind: HistoryEntry['kind'] = isIncoming ? 'received' : 'sent';
+  const sign = isIncoming ? '+' : '-';
+  const asset = activity.asset ?? 'XLM';
+  const amount = activity.amount ?? '0';
+
+  let label: string;
+  if (isIncoming && activity.counterparty) {
+    label = `Received from ${shortenAddress(activity.counterparty)}`;
+  } else if (isPayment && activity.counterparty) {
+    label = `Sent to ${shortenAddress(activity.counterparty)}`;
+  } else if (isIncoming) {
+    label = 'Received';
+  } else {
+    label = humanizeActivityType(activity.activity_type);
+  }
+
+  return {
+    id: activity.id,
+    label,
+    amount: `${sign}${amount} ${asset}`,
+    date: formatActivityDate(activity.created_at),
+    kind,
     status: 'confirmed',
-  },
-  {
-    id: '2',
-    label: 'Sent to Merchant',
-    amount: '-48 XLM',
-    date: 'Yesterday',
-    kind: 'sent',
-    status: 'confirmed',
-  },
-  {
-    id: '3',
-    label: 'Failed merchant payment',
-    amount: '-12 XLM',
-    date: 'Mar 23',
-    kind: 'failed',
-    status: 'failed',
-  },
-];
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Hook: paginated transaction history from the indexer
+// ---------------------------------------------------------------------------
+
+function useTransactionHistory() {
+  const { filter, setFilter } = useHistoryFilter();
+  const environment = useDashboardSettingsStore((s) => s.environment);
+  const { accounts, activeAccountId } = useAccountStore();
+
+  const smartAccountId = React.useMemo(() => {
+    if (!activeAccountId && accounts.length === 0) return null;
+    const active = accounts.find((a) => a.id === activeAccountId) ?? accounts[0];
+    return active?.contractId ?? null;
+  }, [accounts, activeAccountId]);
+
+  const indexerUrl = React.useMemo(() => {
+    if (!smartAccountId) return null;
+    return resolveIndexerUrl(environment);
+  }, [smartAccountId, environment]);
+
+  const adapter = React.useMemo(() => {
+    if (!smartAccountId || !indexerUrl) return null;
+    return createIndexerActivityAdapter(indexerUrl, smartAccountId);
+  }, [smartAccountId, indexerUrl]);
+
+  const [rawItems, setRawItems] = React.useState<IndexerActivityRecord[]>([]);
+  const [nextCursor, setNextCursor] = React.useState<string | null>(null);
+  const [initialLoading, setInitialLoading] = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [error, setError] = React.useState<Error | null>(null);
+
+  React.useEffect(() => {
+    if (!adapter) {
+      setRawItems([]);
+      setNextCursor(null);
+      setInitialLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setInitialLoading(true);
+    setError(null);
+
+    adapter
+      .fetchTransactionPage({ cursor: null, pageSize: 20 })
+      .then((page) => {
+        if (!cancelled) {
+          setRawItems(page.transactions);
+          setNextCursor(page.nextCursor);
+          setInitialLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setInitialLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter]);
+
+  const loadMore = React.useCallback(async () => {
+    if (!adapter || !nextCursor || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const page = await adapter.fetchTransactionPage({
+        cursor: nextCursor,
+        pageSize: 20,
+      });
+      setRawItems((prev) => [...prev, ...page.transactions]);
+      setNextCursor(page.nextCursor);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [adapter, nextCursor, loadingMore]);
+
+  const hasMore = nextCursor !== null;
+
+  const entries = React.useMemo(() => {
+    if (!smartAccountId) return [];
+    return filterHistoryEntries(
+      rawItems.map((r) => mapActivityToEntry(r, smartAccountId)),
+      filter
+    );
+  }, [rawItems, filter, smartAccountId]);
+
+  return {
+    entries,
+    isLoading: initialLoading,
+    isLoadingMore: loadingMore,
+    error,
+    hasMore,
+    loadMore,
+    activeFilter: filter,
+    setFilter,
+    smartAccountId,
+  };
+}
 
 function isHistoryFilter(value: string | null): value is HistoryFilter {
   return value === 'all' || value === 'sent' || value === 'received' || value === 'failed';
@@ -509,8 +667,52 @@ export function HistoryActivityList({
 }
 
 function HistoryScreen() {
-  const { filter, setFilter } = useHistoryFilter();
-  const entries = React.useMemo(() => filterHistoryEntries(HISTORY_ENTRIES, filter), [filter]);
+  const {
+    entries,
+    isLoading,
+    isLoadingMore,
+    error,
+    hasMore,
+    loadMore,
+    activeFilter,
+    setFilter,
+    smartAccountId,
+  } = useTransactionHistory();
+
+  if (!smartAccountId) {
+    return (
+      <PageScaffold
+        eyebrow="Activity"
+        title="History"
+        description="Filter recent transaction activity by sent, received, or failed status."
+      >
+        <EmptyTransactions
+          variant="all"
+          message="No account configured"
+          description="Set up a smart account to view transaction history."
+        />
+      </PageScaffold>
+    );
+  }
+
+  if (error && entries.length === 0) {
+    return (
+      <PageScaffold
+        eyebrow="Activity"
+        title="History"
+        description="Filter recent transaction activity by sent, received, or failed status."
+      >
+        <Card title="Unable to load history">
+          <p className="text-sm text-muted-foreground">
+            {error.message || 'Could not load transaction history.'}
+          </p>
+          <PrimaryButton className="mt-3" onClick={() => window.location.reload()}>
+            Retry
+          </PrimaryButton>
+        </Card>
+      </PageScaffold>
+    );
+  }
 
   return (
     <PageScaffold
@@ -518,7 +720,31 @@ function HistoryScreen() {
       title="History"
       description="Filter recent transaction activity by sent, received, or failed status."
     >
-      <HistoryActivityList activeFilter={filter} entries={entries} onFilterChange={setFilter} />
+      {isLoading ? (
+        <Card title="Recent activity">
+          <div className="flex items-center justify-center py-12">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+        </Card>
+      ) : (
+        <>
+          <HistoryActivityList
+            activeFilter={activeFilter}
+            entries={entries}
+            onFilterChange={setFilter}
+          />
+          {hasMore && (
+            <button
+              type="button"
+              className="mt-2 inline-flex w-full items-center justify-center rounded-xl border border-border px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-accent disabled:opacity-50"
+              disabled={isLoadingMore}
+              onClick={loadMore}
+            >
+              {isLoadingMore ? 'Loading…' : 'Load more'}
+            </button>
+          )}
+        </>
+      )}
     </PageScaffold>
   );
 }

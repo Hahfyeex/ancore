@@ -39,6 +39,7 @@ export default defineConfig({
         '../../packages/account-abstraction/src/index.ts'
       ),
       '@ancore/wallet-shared': path.resolve(rootDir, '../../packages/wallet-shared/src/index.ts'),
+      '@ancore/stellar': path.resolve(rootDir, '../../packages/stellar/src/index.ts'),
     },
   },
 });

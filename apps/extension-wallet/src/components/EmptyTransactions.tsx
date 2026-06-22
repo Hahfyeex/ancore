@@ -4,6 +4,8 @@ export type TransactionHistoryFilter = 'all' | 'sent' | 'received' | 'failed';
 
 export interface EmptyTransactionsProps {
   variant: TransactionHistoryFilter;
+  message?: string;
+  description?: string;
   onReceive?: () => void;
   onResetFilter?: () => void;
 }
@@ -55,20 +57,25 @@ function getConfig(
 
 export function EmptyTransactions({
   variant,
+  message,
+  description: descriptionOverride,
   onReceive = () => {},
   onResetFilter = () => {},
 }: EmptyTransactionsProps) {
   const config = getConfig(variant, onReceive, onResetFilter);
 
+  const title = message ?? config.title;
+  const desc = descriptionOverride ?? config.description;
+
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={config.title}
+      aria-label={title}
       className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-4 py-8 text-center"
     >
-      <p className="text-sm font-medium text-foreground">{config.title}</p>
-      <p className="text-xs text-muted-foreground">{config.description}</p>
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="text-xs text-muted-foreground">{desc}</p>
       <button
         type="button"
         onClick={config.onCta}
