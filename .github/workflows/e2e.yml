@@ -48,8 +48,9 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: .
 
-      - name: Build extension
-        run: pnpm build
+      - name: Build workspace dependencies then extension
+        run: pnpm turbo run build --filter=@ancore/extension-wallet
+        working-directory: .
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install chromium --with-deps
@@ -89,8 +90,9 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: .
 
-      - name: Build extension
-        run: pnpm build
+      - name: Build workspace dependencies then extension
+        run: pnpm turbo run build --filter=@ancore/extension-wallet
+        working-directory: .
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install chromium --with-deps
