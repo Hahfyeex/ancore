@@ -9,7 +9,7 @@ export const AA_VERSION = '0.1.0';
 export { AccountContract } from './account-contract';
 export type { AccountContractReadOptions, InvocationArgs } from './account-contract';
 
-export { getOwner, getNonce } from './get-owner-nonce';
+export { getOwner, getNonce, getVersion } from './get-owner-nonce';
 
 export {
   AccountContractError,
@@ -39,6 +39,7 @@ export {
   decodeOwnerResult,
   decodeRevokeSessionKeyArgs,
   decodeSessionKeyResult,
+  decodeVersionResult,
   decodeVoidResult,
   publicKeyToBytes32ScVal,
   u64ToScVal,
@@ -50,6 +51,7 @@ export {
   encodeInitializeArgs,
   encodeRevokeSessionKeyArgs,
   scValToAddress,
+  scValToU32,
   scValToU64,
   bytes32ScValToPublicKey,
   scValToSessionKey,
@@ -84,10 +86,11 @@ export {
 } from './nonce-drift';
 export type { NonceDriftResult, NonceDriftOptions } from './nonce-drift';
 
+export type { SimulationResult, SimulationError } from './types/simulation';
+
 export { TransactionBuilder } from './transaction-builder';
 export type {
   TransactionBuilderOptions,
   ContractExecuteParams,
-  SimulationResult,
   RefreshSessionKeyTtlParams,
 } from './transaction-builder';
