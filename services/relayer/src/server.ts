@@ -14,6 +14,7 @@ import { renderPrometheusMetrics } from './metrics';
 import { validateBody } from './validation/middleware';
 import { createExecuteRelayHandler } from './handlers/executeRelay';
 import { createValidateRelayHandler } from './handlers/validateRelay';
+import { createHealthHandler } from './routes/health';
 import { IdempotencyStore } from './store/idempotency';
 import { JobQueue } from './queue/JobQueue';
 import type {
@@ -149,6 +150,7 @@ export function createApp(
 
   const executeHandler = createExecuteRelayHandler(relayService);
   const validateHandler = createValidateRelayHandler(relayService);
+  const healthHandler = createHealthHandler(relayService);
 
   const scheduledTransferStore = new ScheduledTransferStore();
   const scheduledTransferService = new ScheduledTransferService(
@@ -170,6 +172,7 @@ export function createApp(
   app.post('/relay/execute', auth, relayLimiter, validate, idempotency, executeHandler);
   app.post('/relay/validate', auth, relayLimiter, validate, validateHandler);
   app.get('/relay/status', statusLimiter, (_req, res) => res.json(relayService.health()));
+  app.get('/health', healthHandler);
   app.get('/metrics', (_req, res) => {
     res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
     res.send(renderPrometheusMetrics());

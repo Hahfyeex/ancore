@@ -32,6 +32,8 @@ export interface RelayServiceContract {
   executeRelay(request: RelayExecuteRequest): Promise<RelayExecuteResponse>;
   validateRelay(request: RelayExecuteRequest): Promise<ValidationResult>;
   health(): HealthResponse;
+  checkRpcHealth(): Promise<DependencyStatus>;
+  checkSignatureServiceHealth(): Promise<DependencyStatus>;
 }
 
 /** Authentication / authorisation contract */
@@ -50,4 +52,10 @@ export interface SignatureServiceContract {
    * Both values are hex-encoded strings.
    */
   verify(publicKey: string, payload: string, signature: string): boolean;
+
+  /**
+   * Health check probe for the signature/KMS backend.
+   * Returns healthy status and latency for monitoring orchestrators.
+   */
+  isHealthy?(): Promise<{ healthy: boolean; latencyMs?: number }>;
 }

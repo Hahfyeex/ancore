@@ -146,8 +146,13 @@ export class RelayService implements RelayServiceContract {
       ? { status: 'ok' }
       : { status: 'degraded', message: 'Storage not initialized' };
 
+    const signatureServiceStatus = this.resolveSignatureServiceStatus();
+
     const overallStatus =
-      queueStatus.status === 'ok' && rpcStatus.status === 'ok' && storageStatus.status === 'ok'
+      queueStatus.status === 'ok' &&
+      rpcStatus.status === 'ok' &&
+      storageStatus.status === 'ok' &&
+      signatureServiceStatus.status === 'ok'
         ? 'ok'
         : 'degraded';
 
@@ -159,6 +164,7 @@ export class RelayService implements RelayServiceContract {
         queue: queueStatus,
         rpc: rpcStatus,
         storage: storageStatus,
+        signatureService: signatureServiceStatus,
       },
     };
   }
@@ -188,6 +194,42 @@ export class RelayService implements RelayServiceContract {
     }
   }
 
+  /** Async signature service health probe with configurable timeout */
+  async checkSignatureServiceHealth(): Promise<DependencyStatus> {
+    if (!this.signatureService.isHealthy) {
+      return { status: 'ok', message: 'Health check not implemented' };
+    }
+
+    const timeoutMs = parseInt(process.env.SIGNATURE_SERVICE_HEALTH_TIMEOUT_MS || '5000', 10);
+    
+    try {
+      const start = Date.now();
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Health check timeout')), timeoutMs)
+      );
+
+      const result = await Promise.race([
+        this.signatureService.isHealthy(),
+        timeoutPromise,
+      ]);
+
+      const latencyMs = Date.now() - start;
+
+      if (!result.healthy) {
+        return {
+          status: 'degraded',
+          message: 'Signature service unreachable',
+          latencyMs: result.latencyMs ?? latencyMs,
+        };
+      }
+
+      return { status: 'ok', latencyMs: result.latencyMs ?? latencyMs };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { status: 'degraded', message: `Signature service health check failed: ${errorMessage}` };
+    }
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────
 
   private resolveRpcStatus(): DependencyStatus {
@@ -197,6 +239,18 @@ export class RelayService implements RelayServiceContract {
 
     if (!this.transactionSubmitter) {
       return { status: 'degraded', message: 'Transaction submitter is not configured' };
+    }
+
+    return { status: 'ok' };
+  }
+
+  private resolveSignatureServiceStatus(): DependencyStatus {
+    if (!this.signatureService) {
+      return { status: 'degraded', message: 'Signature service is not configured' };
+    }
+
+    if (!this.signatureService.isHealthy) {
+      return { status: 'ok', message: 'Health check not implemented' };
     }
 
     return { status: 'ok' };
