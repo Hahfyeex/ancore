@@ -23,6 +23,14 @@ export { AncoreClient, type AncoreClientOptions } from './ancore-client';
 export { addSessionKey, type AddSessionKeyParams } from './add-session-key';
 export { revokeSessionKey, type RevokeSessionKeyParams } from './revoke-session-key';
 export {
+  refreshSessionKeyTtl,
+  parseSessionKeyTtlRefreshedEvent,
+  type RefreshSessionKeyTtlParams,
+  type RefreshSessionKeyTtlOptions,
+  type RefreshSessionKeyTtlResult,
+  type SessionKeyTtlRefreshedEvent,
+} from './refresh-session-key-ttl';
+export {
   permissionToLabel,
   permissionsToLabels,
   formatPermissions,
