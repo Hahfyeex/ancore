@@ -45,7 +45,7 @@ pub enum ContractError {
     InvalidSignature = 9,
     /// Invalid WASM hash provided for upgrade
     InvalidWasmHash = 10,
-    /// Invalid expiration time provided
+    /// Expiration timestamp is invalid (e.g., zero)
     InvalidExpiration = 11,
     /// Caller identity does not match provided auth parameters
     InvalidCallerIdentity = 12,
@@ -1810,6 +1810,41 @@ mod test {
         assert_eq!(client.get_modules().len(), 0);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Issue #257 — Session key lifecycle invariant tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_add_revoke_readd_same_key() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AncoreAccount);
+        let client = AncoreAccountClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        client.initialize(&owner);
+        env.mock_all_auths();
+
+        let session_pk = BytesN::from_array(&env, &[10u8; 32]);
+        let permissions = Vec::new(&env);
+
+        // add → assert present
+        client.add_session_key(&session_pk, &9999u64, &permissions, &None);
+        assert!(client.has_session_key(&session_pk));
+
+        // revoke → assert absent
+        client.revoke_session_key(&session_pk);
+        assert!(!client.has_session_key(&session_pk));
+
+        // re-add same key → assert present again with new expiry
+        client.add_session_key(&session_pk, &19999u64, &permissions, &None);
+        assert!(client.has_session_key(&session_pk));
+
+        let sk = client.get_session_key(&session_pk).unwrap();
+        assert_eq!(sk.expires_at, 19999u64);
+    }
+
+    #[test]
+    fn test_readd_after_revoke_has_new_expiry() {
     #[test]
     fn test_add_session_key_rejects_invalid_spend_policy() {
         let env = Env::default();
@@ -1817,6 +1852,22 @@ mod test {
         let client = AncoreAccountClient::new(&env, &contract_id);
 
         let owner = Address::generate(&env);
+        client.initialize(&owner);
+        env.mock_all_auths();
+
+        let session_pk = BytesN::from_array(&env, &[11u8; 32]);
+        let permissions = Vec::new(&env);
+
+        client.add_session_key(&session_pk, &500u64, &permissions, &None);
+        client.revoke_session_key(&session_pk);
+        client.add_session_key(&session_pk, &888u64, &permissions, &None);
+
+        let sk = client.get_session_key(&session_pk).unwrap();
+        assert_eq!(sk.expires_at, 888u64, "re-added key must carry new expiry");
+    }
+
+    #[test]
+    fn test_revoked_key_cannot_be_resurrected_implicitly() {
         init(&env, &client, &owner);
         env.mock_all_auths();
 
