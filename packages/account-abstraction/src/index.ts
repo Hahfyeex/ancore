@@ -97,3 +97,21 @@ export type {
   ContractExecuteParams,
   RefreshSessionKeyTtlParams,
 } from './transaction-builder';
+
+export {
+  PasskeyError,
+  PasskeyNotSupportedError,
+  PasskeyRegistrationError,
+  PasskeySigningError,
+  registerPasskey,
+  buildAddSessionKeyInvocation,
+  signRelayPayload,
+} from './passkey/passkeyModule';
+export type {
+  P256PublicKey,
+  PasskeyRegistrationResult,
+  PasskeySignatureResult,
+  RegisterPasskeyOptions,
+  SignRelayPayloadOptions,
+  UnsignedRelayPayload,
+} from './passkey/passkeyModule';
