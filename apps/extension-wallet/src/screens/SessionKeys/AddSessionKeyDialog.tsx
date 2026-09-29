@@ -43,10 +43,13 @@ export const AddSessionKeyDialog: React.FC<AddSessionKeyDialogProps> = ({
     try {
       // Convert bitmask to array of permissions - this maintains compatibility with existing hook
       const permissionsArray: SessionPermission[] = [];
-      if (permissionsBitmask & SessionPermission.SEND_PAYMENT) permissionsArray.push(SessionPermission.SEND_PAYMENT);
-      if (permissionsBitmask & SessionPermission.MANAGE_DATA) permissionsArray.push(SessionPermission.MANAGE_DATA);
-      if (permissionsBitmask & SessionPermission.INVOKE_CONTRACT) permissionsArray.push(SessionPermission.INVOKE_CONTRACT);
-      
+      if (permissionsBitmask & SessionPermission.SEND_PAYMENT)
+        permissionsArray.push(SessionPermission.SEND_PAYMENT);
+      if (permissionsBitmask & SessionPermission.MANAGE_DATA)
+        permissionsArray.push(SessionPermission.MANAGE_DATA);
+      if (permissionsBitmask & SessionPermission.INVOKE_CONTRACT)
+        permissionsArray.push(SessionPermission.INVOKE_CONTRACT);
+
       await onSave({ label, permissions: permissionsArray, expiresAt: expiryDurationToMs(expiry) });
       setLabel('');
       setPermissionsBitmask(0);
@@ -73,8 +76,8 @@ export const AddSessionKeyDialog: React.FC<AddSessionKeyDialogProps> = ({
         />
 
         <label className="block mb-2 font-medium">Permissions</label>
-        <PermissionSelector 
-          value={permissionsBitmask} 
+        <PermissionSelector
+          value={permissionsBitmask}
           onChange={setPermissionsBitmask}
           className="mb-4"
         />
