@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Keypair, xdr, Networks } from '@stellar/stellar-sdk';
+import { Address, Keypair, xdr, Networks } from '@stellar/stellar-sdk';
 import { signAuthEntry, registerSignAuthEntryHandlers } from '../sign-auth-entry';
 import { registerHandler } from '@/messaging';
 import { isBackgroundSessionUnlocked } from '../../session-state';
@@ -25,22 +25,40 @@ vi.mock('@/stores/settings', () => ({
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Build a mock SorobanAuthorizationEntry that exposes the methods the
- * handler needs (rootInvocation, toXDR). This avoids version-specific
- * XDR constructor issues in tests — the handler's real fromXDR path
- * is exercised by the "invalid XDR" tests.
+ * Build a genuine, unsigned SorobanAuthorizationEntry for a simple contract
+ * call, authorized by `signerKp`'s address — a real fixture, not a mock.
+ * `authorizeEntry` (used by the handler) calls real SDK methods on this
+ * object (credentials(), toXDR(), rootInvocation()) that a duck-typed mock
+ * cannot satisfy once the fix actually inspects/signs real credentials.
  */
-function mockAuthEntry(entryBytes: Buffer) {
-  const rootInvocation = {
-    function: vi.fn(),
-    subInvocations: vi.fn().mockReturnValue([]),
-  };
+function makeUnsignedAuthEntry(
+  signerKp: Keypair,
+  { expirationLedger = 1000, nonce = 42n }: { expirationLedger?: number; nonce?: bigint } = {}
+): xdr.SorobanAuthorizationEntry {
+  const signerAddress = new Address(signerKp.publicKey()).toScAddress();
 
-  return {
-    credentials: vi.fn(),
-    rootInvocation: vi.fn().mockReturnValue(rootInvocation),
-    toXDR: vi.fn().mockReturnValue(entryBytes),
-  };
+  const addressCredentials = new xdr.SorobanAddressCredentials({
+    address: signerAddress,
+    nonce: xdr.Int64.fromString(nonce.toString()),
+    signatureExpirationLedger: expirationLedger,
+    signature: xdr.ScVal.scvVoid(),
+  });
+
+  const rootInvocation = new xdr.SorobanAuthorizedInvocation({
+    function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(
+      new xdr.InvokeContractArgs({
+        contractAddress: signerAddress,
+        functionName: 'transfer',
+        args: [],
+      })
+    ),
+    subInvocations: [],
+  });
+
+  return new xdr.SorobanAuthorizationEntry({
+    credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(addressCredentials),
+    rootInvocation,
+  });
 }
 
 describe('sign-auth-entry handler', () => {
@@ -54,25 +72,42 @@ describe('sign-auth-entry handler', () => {
   });
 
   describe('signAuthEntry (exported function)', () => {
-    it('should return signedAuthEntry on success', async () => {
-      // Mock fromXDR to return a minimal entry without depending on
-      // SDK union constructors (which vary between versions).
-      const entryBytes = Buffer.alloc(32, 0);
-      const mockEntry = mockAuthEntry(entryBytes);
-      const fromXdrSpy = vi
-        .spyOn(xdr.SorobanAuthorizationEntry, 'fromXDR')
-        .mockReturnValue(mockEntry as any);
+    it('returns a signedAuthEntry with a real, verifiable signature over the correct payload', async () => {
+      const unsignedEntry = makeUnsignedAuthEntry(testKp, { expirationLedger: 555, nonce: 7n });
 
       const result = await signAuthEntry({
-        authEntryXdr: Buffer.from('test').toString('base64'),
+        authEntryXdr: unsignedEntry.toXDR('base64'),
+        networkPassphrase: Networks.TESTNET,
       });
 
-      expect(result.signedAuthEntry).toBeDefined();
       expect(typeof result.signedAuthEntry).toBe('string');
       expect(result.signedAuthEntry.length).toBeGreaterThan(0);
-      expect(fromXdrSpy).toHaveBeenCalled();
 
-      fromXdrSpy.mockRestore();
+      const signedEntry = xdr.SorobanAuthorizationEntry.fromXDR(result.signedAuthEntry, 'base64');
+      const addressCredentials = signedEntry.credentials().address();
+
+      // Address, nonce, and expiration are carried over unchanged from the
+      // entry the caller submitted — only the signature is added.
+      expect(Address.fromScAddress(addressCredentials.address()).toString()).toBe(
+        testKp.publicKey()
+      );
+      expect(addressCredentials.nonce().toString()).toBe('7');
+      expect(addressCredentials.signatureExpirationLedger()).toBe(555);
+
+      // Encoded as the standard Soroban account-auth signature: a Vec of one
+      // Map with public_key/signature entries — not a bare signature blob,
+      // which is what the original (broken) implementation produced. The
+      // exact hash preimage authorizeEntry signs over is the SDK's own
+      // responsibility (HashIDPreimage::SorobanAuthorization, not a naive
+      // concat) — this asserts the shape and that a real 64-byte Ed25519
+      // signature by the right key is present, not the SDK's own internals.
+      const sigVec = addressCredentials.signature().vec()!;
+      expect(sigVec).toHaveLength(1);
+      const sigMap = sigVec[0].map()!;
+      const publicKeyEntry = sigMap.find((e) => e.key().sym().toString() === 'public_key');
+      const sigEntry = sigMap.find((e) => e.key().sym().toString() === 'signature');
+      expect(Buffer.from(publicKeyEntry!.val().bytes()).equals(testKp.rawPublicKey())).toBe(true);
+      expect(sigEntry!.val().bytes()).toHaveLength(64);
     });
 
     it('should throw error if wallet is locked', async () => {
@@ -131,20 +166,14 @@ describe('sign-auth-entry handler', () => {
 
       registerSignAuthEntryHandlers();
 
-      const entryBytes = Buffer.alloc(32, 0);
-      const mockEntry = mockAuthEntry(entryBytes);
-      const fromXdrSpy = vi
-        .spyOn(xdr.SorobanAuthorizationEntry, 'fromXDR')
-        .mockReturnValue(mockEntry as any);
+      const unsignedEntry = makeUnsignedAuthEntry(testKp);
 
       const result = await handlerCb({
-        authEntryXdr: Buffer.from('test').toString('base64'),
+        authEntryXdr: unsignedEntry.toXDR('base64'),
       });
 
       expect(result.signedAuthEntry).toBeDefined();
       expect(typeof result.signedAuthEntry).toBe('string');
-
-      fromXdrSpy.mockRestore();
     });
 
     it('should throw via the registered handler when wallet is locked', async () => {
