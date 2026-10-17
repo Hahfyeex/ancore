@@ -204,6 +204,32 @@ describe('POST /relay/validate', () => {
   });
 });
 
+describe('GET /health route rate limit', () => {
+  it('enforces the configured per-route limit from routeRateLimiter', async () => {
+    const app = makeApp(true, undefined, undefined, {
+      useMockSubmission: true,
+      startScheduler: false,
+    });
+
+    const first = await request(app).get('/health');
+    expect(first.status).not.toBe(429);
+    expect(String(first.headers['ratelimit-limit'])).toBe('120');
+
+    for (let i = 0; i < 119; i++) {
+      const res = await request(app).get('/health');
+      expect(res.status).not.toBe(429);
+    }
+
+    const blocked = await request(app).get('/health');
+    expect(blocked.status).toBe(429);
+    expect(blocked.body).toEqual({
+      error: 'RATE_LIMITED',
+      route: '/health',
+      retryAfter: 60,
+    });
+  });
+});
+
 describe('GET /relay/status', () => {
   it('200 with status ok and dependency details (no auth required)', async () => {
     const res = await request(makeApp(true, undefined, makeMockSubmitter())).get('/relay/status');
@@ -215,6 +241,19 @@ describe('GET /relay/status', () => {
     expect(res.body.dependencies.queue.status).toBe('ok');
     expect(res.body.dependencies.rpc.status).toBe('ok');
     expect(res.body.dependencies.storage.status).toBe('ok');
+  });
+
+  it('reports a real RPC outage instead of a fabricated ok', async () => {
+    const submitter = makeMockSubmitter({
+      isHealthy: jest.fn().mockResolvedValue({ healthy: false, latencyMs: 40 }),
+    });
+    const res = await request(makeApp(true, undefined, submitter)).get('/relay/status');
+
+    expect(res.status).toBe(503);
+    expect(res.body.status).toBe('degraded');
+    expect(res.body.dependencies.rpc.status).toBe('degraded');
+    expect(res.body.dependencies.rpc.message).toBe('Soroban RPC unreachable');
+    expect(submitter.isHealthy).toHaveBeenCalled();
   });
 });
 

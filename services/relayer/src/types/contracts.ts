@@ -40,9 +40,25 @@ export interface RelayServiceOptions {
 }
 
 /** Core relay service contract */
+export interface RelayExecutionOptions {
+  /**
+   * Nonce covered by `signature` when it differs from the replay-protection
+   * nonce. In-process only — HTTP bodies cannot set this. The scheduler uses
+   * it so a recurring transfer can keep the user's original signature while
+   * tracking a fresh nonce on every run (#1422).
+   */
+  signedNonce?: number;
+}
+
 export interface RelayServiceContract {
-  executeRelay(request: RelayExecuteRequest): Promise<RelayExecuteResponse>;
-  validateRelay(request: RelayExecuteRequest): Promise<ValidationResult>;
+  executeRelay(
+    request: RelayExecuteRequest,
+    options?: RelayExecutionOptions
+  ): Promise<RelayExecuteResponse>;
+  validateRelay(
+    request: RelayExecuteRequest,
+    options?: RelayExecutionOptions
+  ): Promise<ValidationResult>;
   health(): HealthResponse;
   checkRpcHealth(): Promise<DependencyStatus>;
   checkSignatureServiceHealth(): Promise<DependencyStatus>;

@@ -37,8 +37,14 @@ import { sendMessage } from '@/messaging';
  */
 function createExtensionRelaySigner(): RelaySigner {
   return {
-    async signRelayEnvelope({ operation, nonce }) {
-      const response = await sendMessage('SIGN_RELAY_PAYLOAD', { operation, nonce });
+    async signRelayEnvelope({ operation, nonce, to, amount, asset }) {
+      const response = await sendMessage('SIGN_RELAY_PAYLOAD', {
+        operation,
+        nonce,
+        to,
+        amount,
+        asset,
+      });
       if ('error' in response) {
         throw new Error(response.error);
       }
@@ -331,10 +337,20 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
 
         if (isHandleInput(recipientInput)) {
           const resolver = service.resolveHandle ?? defaultResolveHandle;
+          // `validateForm` above already rejected malformed handles; this null
+          // check enforces the type contract of the raw-string overload.
           const handle = normalizeUsernameHandle(recipientInput);
+          if (!handle) {
+            setErrors((current) => ({
+              ...current,
+              to: 'Enter a valid @username handle',
+              handle: 'Enter a valid @username handle',
+            }));
+            return false;
+          }
           const resolved = await resolver(handle);
 
-          if (!resolved) {
+          if (!resolved || !isStellarAddress(resolved.accountAddress)) {
             setErrors((current) => ({
               ...current,
               to: HANDLE_NOT_FOUND_MESSAGE,

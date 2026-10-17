@@ -129,6 +129,53 @@ describe('QueueWorker', () => {
     expect(worker.stats.processed).toBe(0);
   });
 
+  it('keeps polling after dequeue throws', async () => {
+    const handler = jest.fn().mockResolvedValue(undefined);
+    const ack = jest.fn();
+    let dequeues = 0;
+    const job: Job = {
+      id: 'job-dequeue-error',
+      idempotencyKey: 'k-dequeue-error',
+      type: 'relay_execute',
+      payload: { ok: true },
+      status: 'processing',
+      attempts: 1,
+      maxAttempts: 3,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const flakyQueue = {
+      dequeue: async () => {
+        dequeues += 1;
+        if (dequeues === 1) {
+          throw new Error('transient db error');
+        }
+        if (dequeues === 2) {
+          return { job, ack, nack: jest.fn() };
+        }
+        return null;
+      },
+      getById: async () => undefined,
+    };
+
+    const worker = new QueueWorker(
+      flakyQueue as unknown as JobQueue,
+      { relay_execute: handler },
+      { pollIntervalMs: 15 }
+    );
+
+    worker.start();
+    await delay(150);
+    await worker.stop();
+
+    expect(dequeues).toBeGreaterThanOrEqual(2);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(worker.stats.succeeded).toBe(1);
+    expect(worker.stats.processed).toBe(1);
+  });
+
   it('passes the full job object to the handler', async () => {
     let receivedJob: Job | undefined;
     const handler = jest.fn().mockImplementation(async (job: Job) => {

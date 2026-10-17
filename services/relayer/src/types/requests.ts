@@ -29,6 +29,11 @@ export interface RelayExecuteRequest {
     todayTotal: number;
     /** Asset code shown in policy denial messages. Defaults to XLM. */
     assetCode?: string;
+    /**
+     * Caller has completed the extra confirmation required when the amount
+     * is above the step-up threshold and still under the daily limit.
+     */
+    stepUpConfirmed?: boolean;
   };
 }
 

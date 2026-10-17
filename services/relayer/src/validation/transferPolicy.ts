@@ -8,6 +8,11 @@ export interface TransferValidationContext {
   policy: TransferPolicy;
   /** Asset code shown in policy denial messages. Defaults to XLM. */
   assetCode?: string;
+  /**
+   * True only after the caller has completed the extra confirmation the
+   * step-up tier requires. Absent or false leaves the transfer blocked.
+   */
+  stepUpConfirmed?: boolean;
 }
 
 export interface TransferValidationResult {
@@ -41,9 +46,16 @@ export function validateTransferPolicyConstraints(
   }
 
   if (result.action === 'step_up') {
+    if (context.stepUpConfirmed === true) {
+      return { valid: true };
+    }
     return {
-      valid: true,
+      valid: false,
       requiresStepUp: true,
+      error: {
+        code: RelayErrorCodes.POLICY_DENIED,
+        message: result.message,
+      },
     };
   }
 

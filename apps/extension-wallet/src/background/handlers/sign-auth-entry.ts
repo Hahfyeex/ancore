@@ -1,13 +1,9 @@
-import { xdr, Keypair, hash as stellarHash } from '@stellar/stellar-sdk';
+import { xdr, Keypair, authorizeEntry } from '@stellar/stellar-sdk';
 import { registerHandler } from '@/messaging';
 import { isBackgroundSessionUnlocked } from '../session-state';
 import { getSigningKeypair } from '../signing-key';
 import { getSettingsState } from '@/stores/settings';
 import { NETWORK_PASSPHRASES, type StellarNetwork } from '@ancore/wallet-shared';
-
-// Buffer is provided by the extension polyfill (see polyfills.ts).
-// In tests, vitest runs in a Node environment where Buffer is native.
-declare const Buffer: typeof import('buffer').Buffer;
 
 export interface SignAuthEntryParams {
   authEntryXdr: string;
@@ -26,7 +22,7 @@ export interface SignAuthEntryResult {
  * 2. Checks the wallet is unlocked
  * 3. Validates the network passphrase matches the active network
  * 4. Signs the auth entry with the owner keypair
- * 5. Returns { signedAuthEntry: string } containing the full signed entry XDR
+ * 5. Returns { signedAuthEntry: string } containing the full signed entry XDR with embedded signature
  *
  * Used by both the internal popup ↔ background message path and the
  * service-worker approval resolution path.
@@ -62,20 +58,24 @@ export async function signAuthEntry(params: SignAuthEntryParams): Promise<SignAu
     throw new Error('Invalid auth entry XDR');
   }
 
-  // 5. Sign the auth entry with the owner keypair
+  // 5. Sign the auth entry with the owner keypair.
+  //
+  // Uses the SDK's own `authorizeEntry` helper rather than constructing the
+  // signed SorobanAuthorizationEntry by hand: the correct signature payload
+  // (network id || entry XDR, hashed) and the correct on-chain signature
+  // encoding (a Vec<Map> of {public_key, signature}, per Soroban's standard
+  // account auth convention) are exactly what that helper already does, and
+  // getting either wrong produces a signature that looks well-formed but is
+  // rejected — or worse, silently mis-authorizes — at __check_auth time.
   const kp: Keypair = await getSigningKeypair();
 
-  // Sign the hash of (networkId || authEntry bytes) — the SEP-43 signature payload.
-  // The signature bytes are base64-encoded and returned.
-  // TODO(#770): embed the signature in a fully-formed SorobanAuthorizationEntry
-  // with address credentials once the SDK XDR constructors are stabilised.
-  const networkId = stellarHash(Buffer.from(expectedPassphrase));
-  const entryBytes = authEntry.toXDR();
-  const payload = Buffer.concat([networkId, entryBytes]);
-  const signatureHash = stellarHash(payload);
-  const signature = kp.sign(signatureHash);
+  if (authEntry.credentials().switch().name !== 'sorobanCredentialsAddress') {
+    throw new Error('Only address-based authorization entries can be signed here');
+  }
+  const validUntilLedgerSeq = authEntry.credentials().address().signatureExpirationLedger();
 
-  const signedAuthEntry = Buffer.from(signature).toString('base64');
+  const signedEntry = await authorizeEntry(authEntry, kp, validUntilLedgerSeq, expectedPassphrase);
+  const signedAuthEntry = signedEntry.toXDR('base64');
 
   return { signedAuthEntry };
 }

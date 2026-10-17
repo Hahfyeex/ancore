@@ -116,15 +116,21 @@ export class ScheduledTransferService {
   }
 
   private async executeTransfer(transfer: ScheduledTransfer, now: Date): Promise<void> {
+    const approvedNonce = transfer.relayPayload.nonce;
+    const priorExecutions = await this.store.listExecutions(transfer.id);
+    const nonce = approvedNonce + priorExecutions.length;
     const relayRequest: RelayExecuteRequest = {
       sessionKey: transfer.relayPayload.sessionKey,
       operation: transfer.relayPayload.operation,
       parameters: transfer.relayPayload.parameters,
       signature: transfer.relayPayload.signature,
-      nonce: transfer.relayPayload.nonce,
+      nonce,
     };
 
-    const response = await this.relayService.executeRelay(relayRequest);
+    const response = await this.relayService.executeRelay(
+      relayRequest,
+      nonce === approvedNonce ? undefined : { signedNonce: approvedNonce }
+    );
     const executedAt = now.toISOString();
 
     const log: ScheduledTransferExecutionLog = {

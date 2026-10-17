@@ -120,7 +120,11 @@ describe('extension router', () => {
 
     await user.click(screen.getByRole('link', { name: /go back to safety/i }));
 
-    expect(await screen.findByRole('heading', { name: /your wallet/i })).toBeInTheDocument();
+    // The real HomeScreen (wired in place of the router's old hardcoded
+    // placeholder) has no "Your wallet" heading — assert on what it actually
+    // renders instead: the page title and its always-present account label.
+    await waitFor(() => expect(document.title).toBe('Home | Ancore Extension'));
+    expect(await screen.findByText(/main account/i)).toBeInTheDocument();
   });
 
   it('supports back-style navigation for nested routes', async () => {

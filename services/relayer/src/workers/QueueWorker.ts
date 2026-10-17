@@ -1,3 +1,4 @@
+import { rootLogger } from '../logging/logger';
 import type { JobQueueContract } from '../queue/types';
 import type { HandlerRegistry, WorkerOptions, WorkerStats } from './types';
 
@@ -76,7 +77,22 @@ export class QueueWorker {
 
   private schedulePoll(): void {
     if (!this.running) return;
-    this.pollTimer = setTimeout(() => this.poll(), this.pollIntervalMs);
+    this.pollTimer = setTimeout(() => {
+      // `dequeue()` sits outside the per-job try/catch. Without this catch,
+      // one transient DB error rejects `poll()` before it can reschedule, and
+      // the worker never polls again (#1419). Same pattern as SchedulerEngine.
+      void this.poll()
+        .catch((err: unknown) => {
+          rootLogger.error(
+            {
+              outcome: 'error',
+              error: err instanceof Error ? err.message : String(err),
+            },
+            'queue worker poll failed; scheduling the next poll'
+          );
+        })
+        .finally(() => this.schedulePoll());
+    }, this.pollIntervalMs);
   }
 
   private async poll(): Promise<void> {
@@ -116,8 +132,6 @@ export class QueueWorker {
       // Fire-and-forget; concurrency is tracked via activeJobs counter
       void finish();
     }
-
-    this.schedulePoll();
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

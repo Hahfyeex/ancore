@@ -94,13 +94,57 @@ All errors expose a `.code` string for programmatic handling.
 
 ### `AncoreClient`
 
-High-level client. Instantiate once per account contract.
+High-level client. Instantiate once per account contract or instantiate directly using the convenience factory `createSmartAccount`.
 
 ```typescript
+import { AncoreClient, createSmartAccount } from '@ancore/core-sdk';
+
+// ── Convenience Factory (One-Liner) ──────────────────────────────────────────
+const client = AncoreClient.createSmartAccount('GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFXYORECK3P4YWPOY64KB');
+// Or standalone:
+// const client = createSmartAccount('GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFXYORECK3P4YWPOY64KB');
+
+// ── Manual Setup ─────────────────────────────────────────────────────────────
+// const contractId = deriveContractId(ownerPublicKey, 'testnet');
+// const client = new AncoreClient({ accountContractId: contractId });
+```
+
+#### `AncoreClient.createSmartAccount` (Static Factory)
+
+Convenience factory method that automatically looks up / derives the deterministic Soroban contract ID from the owner's Stellar public key and initializes an `AncoreClient` instance ready for use.
+
+```typescript
+AncoreClient.createSmartAccount(
+  publicKey: string,
+  options?: CreateSmartAccountClientOptions
+): AncoreClient
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `publicKey` | `string` | ✓ | Owner Ed25519 public key (G…) or deployed contract ID (C…) |
+| `options.network` | `Network` | | Network used for contract ID derivation (`'testnet'`, `'mainnet'`, etc. Default: `'testnet'`) |
+| `options.accountContractId` | `string` | | Explicit contract ID override (C…) |
+| `options.retryOptions` | `RetryOptions` | | Default network retry configuration |
+
+**Comparison: One-Liner vs Manual Setup**
+
+```typescript
+// ❌ Before (Manual Boilerplate):
+import { AncoreClient, deriveContractId } from '@ancore/core-sdk';
+
+const ownerPublicKey = 'GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFXYORECK3P4YWPOY64KB';
+const contractId = deriveContractId(ownerPublicKey, 'testnet');
+const client = new AncoreClient({ accountContractId: contractId });
+
+// ✅ After (One-Liner Setup):
 import { AncoreClient } from '@ancore/core-sdk';
 
-const client = new AncoreClient({ accountContractId: 'C...' });
+const client = AncoreClient.createSmartAccount('GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFXYORECK3P4YWPOY64KB');
+console.log(client.accountContractId); // C...
 ```
+
+---
 
 **Constructor**
 
@@ -178,6 +222,115 @@ interface RevokeSessionKeyParams {
 |-------|------|-----------|
 | `BuilderValidationError` | `BUILDER_VALIDATION` | `publicKey` is empty |
 | `SessionKeyManagementError` | `SESSION_KEY_REVOKE_FAILED` | Unexpected error from contract layer |
+
+---
+
+#### `client.createWallet`
+
+Creates a new Ancore wallet by generating a fresh BIP39 mnemonic, deriving an Ed25519 keypair via BIP-44 HD derivation, and optionally encrypting the mnemonic with the provided password. Asynchronous.
+
+```typescript
+createWallet(params?: CreateWalletParams): Promise<CreateWalletResult>
+```
+
+```typescript
+interface CreateWalletParams {
+  password?:     string; // Password used to encrypt mnemonic (optional)
+  accountIndex?: number; // BIP-44 account index (default: 0)
+}
+```
+
+```typescript
+interface CreateWalletResult {
+  mnemonic:           string;                     // BIP39 mnemonic phrase (sensitive)
+  publicKey:          string;                     // G… Ed25519 public key (safe to persist)
+  secretKey:          string;                     // S… Ed25519 secret key (sensitive)
+  accountIndex:       number;                     // HD account index used
+  contractId:         string;                     // C… contract ID derived from public key (safe to persist)
+  encryptedMnemonic?: EncryptedSecretKeyPayload;  // Present only when password was supplied
+}
+```
+
+**Validation rules**
+
+| Field | Rule |
+|-------|------|
+| `accountIndex` | Non-negative integer when supplied |
+
+**Example**
+
+```typescript
+const client = new AncoreClient({ accountContractId: 'C...' });
+const wallet = await client.createWallet({ password: 'user-password' });
+// wallet.publicKey  → G…  (safe to persist)
+// wallet.contractId → C…  (safe to persist)
+// wallet.encryptedMnemonic → persist this; do NOT persist wallet.secretKey
+```
+
+---
+
+#### `client.refreshSessionKeyTtl`
+
+Builds the `InvocationArgs` or simulates/refreshes the Soroban persistent storage TTL for an active session key entry so it is not evicted before its logical expiration. When `options` are provided, simulates against the RPC network and returns a `RefreshSessionKeyTtlResult`. Without `options`, synchronously returns `InvocationArgs`.
+
+```typescript
+refreshSessionKeyTtl(
+  params: RefreshSessionKeyTtlParams,
+  options?: RefreshSessionKeyTtlOptions
+): InvocationArgs | Promise<RefreshSessionKeyTtlResult>
+```
+
+```typescript
+interface RefreshSessionKeyTtlParams {
+  publicKey: string; // G… Ed25519 public key of the session key to extend
+  expiresAt: number; // Known logical expiry in unix seconds (used for client-side preflight)
+}
+
+interface RefreshSessionKeyTtlOptions extends AccountContractReadOptions {
+  nowMs?:               number; // Override current time in ms (useful for deterministic testing)
+  simulationTimeoutMs?: number; // Maximum time in ms to wait for Soroban simulation RPC (default: 15000)
+}
+
+interface RefreshSessionKeyTtlResult {
+  invocation: InvocationArgs;
+  operation:  ReturnType<AccountContract['buildInvokeOperation']>;
+  event:      SessionKeyTtlRefreshedEvent | null;
+}
+```
+
+**Validation rules**
+
+| Field | Rule |
+|-------|------|
+| `publicKey` | Valid Stellar Ed25519 public key (G…) |
+| `expiresAt` | Finite number in Unix seconds; key must be active (`expiresAt > now`) |
+
+**Errors**
+
+| Error | Code | Condition |
+|-------|------|-----------|
+| `BuilderValidationError` | `BUILDER_VALIDATION` | Invalid `publicKey` format or non-finite `expiresAt` |
+| `SessionKeyManagementError` | `SESSION_KEY_EXPIRED` | Session key has already expired (`expiresAt <= now`) |
+| `SimulationFailedError` | `SIMULATION_FAILED` | Simulation RPC call fails or returns error |
+
+**Example**
+
+```typescript
+// Build invocation args only (synchronous, no network)
+const invocation = client.refreshSessionKeyTtl({
+  publicKey: 'GABC...XYZ',
+  expiresAt: Math.floor(Date.now() / 1000) + 3600,
+});
+
+// With simulation against RPC network (asynchronous)
+const result = await client.refreshSessionKeyTtl(
+  {
+    publicKey: 'GABC...XYZ',
+    expiresAt: Math.floor(Date.now() / 1000) + 3600,
+  },
+  { rpcUrl: 'https://soroban-testnet.stellar.org' }
+);
+```
 
 ---
 
@@ -331,7 +484,81 @@ const invocation = revokeSessionKey(accountContract, { publicKey: 'GABC...XYZ' }
 
 ---
 
+### `createWallet` (standalone)
+
+```typescript
+import { createWallet } from '@ancore/core-sdk';
+
+const wallet = await createWallet({ password: 'user-password' });
+```
+
+---
+
+### `refreshSessionKeyTtl` (standalone)
+
+```typescript
+import { refreshSessionKeyTtl } from '@ancore/core-sdk';
+
+// Build invocation args only (synchronous)
+const invocation = refreshSessionKeyTtl(accountContract, {
+  publicKey: 'GABC...XYZ',
+  expiresAt: Math.floor(Date.now() / 1000) + 3600,
+});
+
+// Or with simulation against RPC network (asynchronous)
+const result = await refreshSessionKeyTtl(
+  accountContract,
+  {
+    publicKey: 'GABC...XYZ',
+    expiresAt: Math.floor(Date.now() / 1000) + 3600,
+  },
+  { rpcUrl: 'https://soroban-testnet.stellar.org' }
+);
+```
+
+---
+
 ## `@ancore/account-abstraction`
+
+### `AccountAbstractionClient` / `createSmartAccount`
+
+High-level client wrapper around `AccountContract` with built-in network retry, deterministic contract address derivation, and convenience methods.
+
+```typescript
+import { createSmartAccount, AccountAbstractionClient } from '@ancore/account-abstraction';
+
+// ── One-Liner Smart Account Client Setup ─────────────────────────────────────
+const client = createSmartAccount('GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFXYORECK3P4YWPOY64KB', rpcServer);
+
+// Read account details without passing sourceAccount repeatedly:
+const owner = await client.getOwner();
+const nonce = await client.getNonce();
+
+// Build invocations directly:
+const invocation = client.initialize();
+const executeInvocation = client.execute(targetContract, 'transfer', args, nonce);
+```
+
+#### `createSmartAccount(publicKey, server, options?)`
+
+```typescript
+function createSmartAccount(
+  publicKey: string,
+  server: SorobanRpcServer,
+  options?: Partial<CreateSmartAccountOptions>
+): AccountAbstractionClient
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `publicKey` | `string` | ✓ | Owner Ed25519 public key (G…) or deployed contract ID (C…) |
+| `server` | `SorobanRpcServer` | ✓ | Soroban RPC server instance |
+| `options.contractId` | `string` | | Explicit contract ID override (C…) |
+| `options.network` | `string` | | Network name (`'testnet'`, `'mainnet'`, `'futurenet'`, `'local'`) |
+| `options.networkPassphrase` | `string` | | Custom network passphrase |
+| `options.retryOptions` | `ClientRetryOptions` | | Network retry settings (maxRetries, exponential backoff, jitter) |
+
+---
 
 ### `AccountContract`
 

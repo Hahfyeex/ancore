@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode, useState } from 'react';
+import { useEffect, type ReactNode, useState } from 'react';
 import {
   BrowserRouter,
   MemoryRouter,
@@ -11,7 +11,6 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import {
-  ArrowRight,
   BarChart3,
   CalendarClock,
   FileText,
@@ -26,6 +25,8 @@ import { cn } from '@ancore/ui-kit';
 
 import { DashboardAuthProvider, useDashboardAuth } from '../auth';
 import { AppErrorBoundary, RouteErrorBoundary } from '../components/AppErrorBoundary';
+import { useAccountOverview } from '../hooks/useAccountOverview';
+import { useWalletConnection } from '../hooks/useWalletConnection';
 
 /**
  * This is the app's only router. A second `BrowserRouter` lived in
@@ -211,6 +212,8 @@ function DashboardLayout() {
 
 function OverviewPage() {
   const { session } = useDashboardAuth();
+  const { ownerPublicKey } = useWalletConnection();
+  const { data: overview } = useAccountOverview(ownerPublicKey ?? '');
 
   return (
     <section className="space-y-8">
@@ -225,9 +228,9 @@ function OverviewPage() {
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         {[
-          ['Available balance', '1,245.80 XLM'],
-          ['Pending', '0.00 XLM'],
-          ['This month', '24 payments'],
+          ['Available balance', overview ? `${overview.balance.toLocaleString('en-US')} XLM` : '—'],
+          ['Account status', overview?.status ?? 'unknown'],
+          ['Sequence', overview ? String(overview.nonce) : '—'],
         ].map(([label, value]) => (
           <article className="dashboard-panel p-5" key={label}>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -304,14 +307,7 @@ function SettingsPage() {
 
 function LoginPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { login, status } = useDashboardAuth();
-  const [displayName, setDisplayName] = useState('Dashboard User');
-
-  const from = useMemo(() => {
-    const state = location.state as { from?: string } | null;
-    return state?.from ?? '/dashboard';
-  }, [location.state]);
+  const { status } = useDashboardAuth();
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -330,31 +326,16 @@ function LoginPage() {
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">Sign in</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          Continue to your secure wallet operations workspace.
+          Dashboard authentication is not configured in this environment.
         </p>
-        <label className="mt-8 block text-sm font-medium">
-          Display name
-          <input
-            aria-label="Display name"
-            className="dashboard-field mt-2"
-            onChange={(event) => setDisplayName(event.target.value)}
-            value={displayName}
-          />
-        </label>
-        <button
-          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-transform duration-150 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98]"
-          onClick={() => {
-            login(displayName);
-            navigate(from, { replace: true });
-          }}
-          type="button"
+        <div
+          aria-live="polite"
+          className="mt-8 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm leading-6"
+          role="alert"
         >
-          Continue
-          <ArrowRight className="h-4 w-4" />
-        </button>
-        <p className="mt-5 text-center text-xs text-muted-foreground">
-          Session data stays in this browser.
-        </p>
+          Sign-in is unavailable until a server-backed identity provider is configured. No local
+          session or bearer token was created.
+        </div>
       </section>
     </main>
   );

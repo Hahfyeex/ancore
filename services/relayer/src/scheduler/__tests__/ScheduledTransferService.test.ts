@@ -1,6 +1,7 @@
 import { ScheduledTransferStore } from '../ScheduledTransferStore';
 import { ScheduledTransferService } from '../ScheduledTransferService';
 import { RelayService } from '../../services/relayService';
+import { MemoryNonceStore } from '../../store/nonceStore';
 
 const VALID_KEY = 'a'.repeat(64);
 const VALID_SIG = 'b'.repeat(128);
@@ -57,6 +58,42 @@ describe('ScheduledTransferService execution safeguards', () => {
     expect(updated?.consecutiveFailures).toBe(1);
     expect(new Date(updated!.nextRunAt).getTime()).toBeGreaterThanOrEqual(beforeProcess);
     expect(await service.listExecutions(transfer.id, 'caller-a')).toHaveLength(1);
+  });
+
+  it('uses a fresh nonce on each recurring execution', async () => {
+    const store = new ScheduledTransferStore();
+    const nonceStore = new MemoryNonceStore();
+    const approvedNonce = 1;
+    const relayService = new RelayService(
+      {
+        verify: (_key: string, payload: string) => {
+          const parsed = JSON.parse(Buffer.from(payload, 'hex').toString('utf8')) as {
+            nonce: number;
+          };
+          return parsed.nonce === approvedNonce;
+        },
+      },
+      undefined,
+      undefined,
+      undefined,
+      { useMockSubmission: true },
+      nonceStore
+    );
+    const service = new ScheduledTransferService(store, relayService);
+    const start = new Date('2026-01-01T00:00:00.000Z');
+    const transfer = await service.create(validBody(start.toISOString()), 'caller-a');
+
+    expect(await service.processDueTransfers(start)).toBe(1);
+    expect(await service.processDueTransfers(new Date('2026-01-02T00:00:00.000Z'))).toBe(1);
+
+    const logs = await service.listExecutions(transfer.id, 'caller-a');
+    expect(logs.filter((log) => log.outcome === 'success')).toHaveLength(2);
+    expect(store.getById(transfer.id)?.status).toBe('active');
+    expect(store.getById(transfer.id)?.consecutiveFailures).toBe(0);
+    expect(() => nonceStore.assertFresh(VALID_KEY, approvedNonce)).toThrow('Nonce already used');
+    expect(() => nonceStore.assertFresh(VALID_KEY, approvedNonce + 1)).toThrow(
+      'Nonce already used'
+    );
   });
 
   it('scopes pause/cancel/get to the owning caller', async () => {

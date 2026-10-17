@@ -26,6 +26,12 @@ export interface RelayExecuteResponse {
 export interface ValidationResult {
   valid: boolean;
   error?: RelayError;
+  /**
+   * Set when the amount is above the step-up threshold and the caller has
+   * not confirmed it. Distinct from a daily-limit block: the same request
+   * can proceed once `transferPolicy.stepUpConfirmed` is true.
+   */
+  requiresStepUp?: boolean;
 }
 
 export interface DependencyStatus {

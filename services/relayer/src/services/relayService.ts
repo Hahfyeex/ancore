@@ -1,9 +1,10 @@
 import { randomBytes } from 'crypto';
 import { trace, SpanStatusCode } from '@opentelemetry/api';
-import { validateTransferPolicy } from '@ancore/types';
+import { validateTransferPolicyConstraints } from '../validation/transferPolicy';
 import { getSessionKey } from '@ancore/account-abstraction';
 import { rpc } from '@stellar/stellar-sdk';
 import { getEnv } from '../config/env';
+import { buildCanonicalPayload } from '../payload/builder';
 import type { JobQueueContract } from '../queue/types';
 import type { IdempotencyStoreContract } from '../store/idempotency';
 import type { NonceStore } from '../store/nonceStore';
@@ -14,6 +15,7 @@ import type {
   RelayServiceOptions,
   RelayExecuteRequest,
   RelayExecuteResponse,
+  RelayExecutionOptions,
   ValidationResult,
   HealthResponse,
   DependencyStatus,
@@ -51,7 +53,10 @@ export class RelayService implements RelayServiceContract {
     this.useMockSubmission = isMockSubmissionEnabled(options);
   }
 
-  async validateRelay(request: RelayExecuteRequest): Promise<ValidationResult> {
+  async validateRelay(
+    request: RelayExecuteRequest,
+    options?: RelayExecutionOptions
+  ): Promise<ValidationResult> {
     return tracer.startActiveSpan('relayer.validate', async (span): Promise<ValidationResult> => {
       span.setAttribute('session_key_id', request.sessionKey);
       span.setAttribute('nonce', request.nonce);
@@ -91,7 +96,8 @@ export class RelayService implements RelayServiceContract {
           }
         }
 
-        const payload = this.canonicalPayload(request);
+        const signedNonce = options?.signedNonce ?? request.nonce;
+        const payload = this.canonicalPayload({ ...request, nonce: signedNonce });
 
         try {
           const targetContract = request.parameters.accountAddress as string;
@@ -136,16 +142,26 @@ export class RelayService implements RelayServiceContract {
         }
 
         if (request.transferPolicy) {
-          const { policy, amount, todayTotal, assetCode } = request.transferPolicy;
-          const policyResult = validateTransferPolicy(amount, todayTotal, policy, assetCode);
-          if (policyResult.action === 'block') {
-            const error: RelayError = {
+          const { policy, amount, todayTotal, assetCode, stepUpConfirmed } = request.transferPolicy;
+          const policyCheck = validateTransferPolicyConstraints({
+            amount,
+            todayTotal,
+            policy,
+            assetCode,
+            stepUpConfirmed,
+          });
+          if (!policyCheck.valid || policyCheck.requiresStepUp) {
+            const error: RelayError = policyCheck.error ?? {
               code: RelayErrorCodes.POLICY_DENIED,
-              message: policyResult.message,
+              message: 'This transfer requires additional confirmation.',
             };
             span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
             span.setAttribute('error.code', error.code);
-            return { valid: false, error };
+            return {
+              valid: false,
+              requiresStepUp: policyCheck.requiresStepUp,
+              error,
+            };
           }
         }
 
@@ -157,10 +173,20 @@ export class RelayService implements RelayServiceContract {
     });
   }
 
-  async executeRelay(request: RelayExecuteRequest): Promise<RelayExecuteResponse> {
-    const validation = await this.validateRelay(request);
-    if (!validation.valid) {
-      return { success: false, error: validation.error, gasUsed: 0 };
+  async executeRelay(
+    request: RelayExecuteRequest,
+    options?: RelayExecutionOptions
+  ): Promise<RelayExecuteResponse> {
+    const validation = await this.validateRelay(request, options);
+    if (!validation.valid || validation.requiresStepUp) {
+      return {
+        success: false,
+        error: validation.error ?? {
+          code: RelayErrorCodes.POLICY_DENIED,
+          message: 'This transfer requires additional confirmation.',
+        },
+        gasUsed: 0,
+      };
     }
 
     if (this.nonceStore) {
@@ -384,9 +410,20 @@ export class RelayService implements RelayServiceContract {
     return null;
   }
 
+  // Delegates to the shared builder (../payload/builder) rather than
+  // re-serializing inline, so the client (core-sdk's relay-payload.ts) and
+  // server can never drift on what's actually covered by the signature.
+  // That drift previously left `to`/`amount`/`asset` unsigned entirely — a
+  // valid signature could be replayed with substituted transfer parameters.
   private canonicalPayload(req: RelayExecuteRequest): string {
-    return Buffer.from(
-      JSON.stringify({ sessionKey: req.sessionKey, operation: req.operation, nonce: req.nonce })
-    ).toString('hex');
+    const parameters = req.parameters as { to?: unknown; amount?: unknown; asset?: unknown };
+    return buildCanonicalPayload({
+      sessionKey: req.sessionKey,
+      operation: req.operation,
+      nonce: req.nonce,
+      to: typeof parameters.to === 'string' ? parameters.to : '',
+      amount: typeof parameters.amount === 'string' ? parameters.amount : '',
+      asset: typeof parameters.asset === 'string' ? parameters.asset : '',
+    });
   }
 }
