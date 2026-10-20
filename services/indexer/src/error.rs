@@ -23,6 +23,17 @@ pub struct ErrorEnvelope {
     pub details: Option<Value>,
 }
 
+impl ErrorEnvelope {
+    /// Canonical 404 body for missing resources and unmatched routes.
+    pub fn not_found() -> Self {
+        Self {
+            code: codes::NOT_FOUND,
+            message: "Resource not found".to_string(),
+            details: None,
+        }
+    }
+}
+
 /// Canonical error codes used across all indexer API routes.
 pub mod codes {
     pub const INVALID_CURSOR: &str = "INVALID_CURSOR";
@@ -31,6 +42,7 @@ pub mod codes {
     pub const QUERY_TIMEOUT: &str = "QUERY_TIMEOUT";
     pub const DATABASE_ERROR: &str = "DATABASE_ERROR";
     pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
+    pub const SERVICE_UNAVAILABLE: &str = "SERVICE_UNAVAILABLE";
 }
 
 #[derive(Error, Debug)]
@@ -47,10 +59,8 @@ pub enum ApiError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 
-    #[error("Query timed out: {0}")]
-    #[allow(dead_code)]
-    QueryTimeout(String),
-
+    #[error("Service unavailable: {0}")]
+    ServiceUnavailable(String),
     #[error("Internal server error: {0}")]
     Internal(#[from] anyhow::Error),
 }
@@ -65,14 +75,20 @@ impl IntoResponse for ApiError {
                 ApiError::InvalidFilter(msg) => {
                     (StatusCode::BAD_REQUEST, codes::INVALID_FILTER, msg, None)
                 }
-                ApiError::NotFound => (
-                    StatusCode::NOT_FOUND,
-                    codes::NOT_FOUND,
-                    "Resource not found".to_string(),
+                ApiError::ServiceUnavailable(msg) => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    codes::SERVICE_UNAVAILABLE,
+                    msg,
                     None,
                 ),
-                ApiError::QueryTimeout(msg) => {
-                    (StatusCode::GATEWAY_TIMEOUT, codes::QUERY_TIMEOUT, msg, None)
+                ApiError::NotFound => {
+                    let envelope = ErrorEnvelope::not_found();
+                    (
+                        StatusCode::NOT_FOUND,
+                        envelope.code,
+                        envelope.message,
+                        envelope.details,
+                    )
                 }
                 ApiError::Database(err) => {
                     if matches!(err, sqlx::Error::PoolTimedOut) {

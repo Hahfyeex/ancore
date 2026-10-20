@@ -44,7 +44,7 @@ export interface RetryOptions {
    * Custom predicate to determine whether an error should trigger a retry.
    * If not provided, defaults to {@link isTransientNetworkError}.
    */
-  isRetryable?: (error: unknown) => boolean;
+  isRetryable?: (error: any) => boolean;
 
   /**
    * Optional callback invoked before each retry attempt with attempt number, error, and sleep delay.
@@ -90,6 +90,8 @@ const TRANSIENT_MESSAGE_PATTERNS = [
   /service unavailable/i,
   /gateway timeout/i,
   /bad gateway/i,
+  /transient/i,
+  /retry/i,
   /\b50[0234]\b/,
 ];
 

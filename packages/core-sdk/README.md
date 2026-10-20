@@ -473,7 +473,7 @@ Apache-2.0
 
 SDK consumers can narrow generic error responses by their machine-readable code:
 
-~~~
+```
 import { isNetworkError, isRateLimitError } from '@ancore/core-sdk';
 
 try {
@@ -485,4 +485,4 @@ try {
     console.log('Check the network connection.');
   }
 }
-~~~
+```

@@ -122,11 +122,108 @@ export function isVaultNotFoundError(
   return hasErrorCode(error, ['VAULT_NOT_FOUND', 'WALLET_VAULT_NOT_FOUND'] as const);
 }
 
+/** True when a Soroban transaction failed because its resource/fee budget was exhausted. */
+export function isInsufficientFee(
+  error: unknown
+): error is ErrorWithCode<'TX_INSUFFICIENT_FEE' | 'BUDGET_EXCEEDED'> {
+  if (error == null) return false;
+
+  const parts: string[] = [];
+  if (typeof error === 'string') {
+    parts.push(error);
+  } else if (typeof error === 'object') {
+    const candidate = error as {
+      code?: unknown;
+      name?: unknown;
+      message?: unknown;
+      data?: unknown;
+    };
+    if (typeof candidate.code === 'string') parts.push(candidate.code);
+    if (typeof candidate.name === 'string') parts.push(candidate.name);
+    if (typeof candidate.message === 'string') parts.push(candidate.message);
+    if (typeof candidate.data === 'string') parts.push(candidate.data);
+    else if (candidate.data && typeof candidate.data === 'object') {
+      const data = candidate.data as { code?: unknown; name?: unknown; message?: unknown };
+      if (typeof data.code === 'string') parts.push(data.code);
+      if (typeof data.name === 'string') parts.push(data.name);
+      if (typeof data.message === 'string') parts.push(data.message);
+    }
+  }
+
+  const message = parts.join(' ').toLowerCase();
+  if (/unauthori[sz]ed|bad_auth|signature|forbidden/.test(message)) return false;
+  return (
+    hasErrorCode(error, ['TX_INSUFFICIENT_FEE', 'BUDGET_EXCEEDED'] as const) ||
+    message.includes('tx_insufficient_fee') ||
+    message.includes('budgetexceeded') ||
+    message.includes('budget exceeded') ||
+    message.includes('insufficient fee')
+  );
+}
+
 /** True when the requested Soroban contract is not deployed or cannot be located. */
 export function isContractNotFoundError(
   error: unknown
 ): error is ErrorWithCode<'CONTRACT_NOT_FOUND' | 'CONTRACT_MISSING'> {
-  return hasErrorCode(error, ['CONTRACT_NOT_FOUND', 'CONTRACT_MISSING'] as const, 404);
+  if (error == null) return false;
+
+  const parts: string[] = [];
+  if (typeof error === 'string') {
+    parts.push(error);
+  } else if (typeof error === 'object') {
+    const candidate = error as {
+      code?: unknown;
+      name?: unknown;
+      message?: unknown;
+      data?: unknown;
+      status?: unknown;
+      statusCode?: unknown;
+    };
+    if (typeof candidate.code === 'string') parts.push(candidate.code);
+    if (typeof candidate.name === 'string') parts.push(candidate.name);
+    if (typeof candidate.message === 'string') parts.push(candidate.message);
+    if (typeof candidate.data === 'string') parts.push(candidate.data);
+    else if (candidate.data && typeof candidate.data === 'object') {
+      const data = candidate.data as { code?: unknown; name?: unknown; message?: unknown };
+      if (typeof data.code === 'string') parts.push(data.code);
+      if (typeof data.name === 'string') parts.push(data.name);
+      if (typeof data.message === 'string') parts.push(data.message);
+    }
+    if (candidate.status === 404 || candidate.statusCode === 404) return true;
+  }
+
+  const message = parts.join(' ').toLowerCase();
+  if (/unauthori[sz]ed|bad_auth|signature|forbidden/.test(message)) return false;
+  return (
+    hasErrorCode(error, ['CONTRACT_NOT_FOUND', 'CONTRACT_MISSING'] as const, 404) ||
+    (message.includes('hosterror') && message.includes('missingvalue')) ||
+    /contract (was )?not found|missing contract|contract_not_found|contract_missing/.test(message)
+  );
+}
+
+/** Alias for isInvalidSignatureError */
+export const isInvalidSignature = isInvalidSignatureError;
+
+/** True when a request encountered a network error or connection failure. */
+export function isNetworkError(
+  error: unknown
+): error is ErrorWithCode<
+  'NETWORK_ERROR' | 'NETWORK_TIMEOUT' | 'ETIMEDOUT' | 'ECONNABORTED' | 'ECONNREFUSED'
+> {
+  return hasErrorCode(error, [
+    'NETWORK_ERROR',
+    'NETWORK_TIMEOUT',
+    'ETIMEDOUT',
+    'ECONNABORTED',
+    'ECONNREFUSED',
+  ] as const);
+}
+
+/** True when a smart contract invocation fails or reverts. */
+export function isContractFailed(
+  error: unknown
+): error is ErrorWithCode<'CONTRACT_FAILED' | 'CONTRACT_ERROR' | 'CONTRACT_NOT_FOUND'> {
+  return hasErrorCode(error, ['CONTRACT_FAILED', 'CONTRACT_ERROR', 'CONTRACT_NOT_FOUND'] as const);
 }
 
 // ---------------------------------------------------------------------------
